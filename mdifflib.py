@@ -32,6 +32,7 @@ __all__ = ['get_close_matches', 'ndiff', 'restore', 'SequenceMatcher',
 
 from heapq import nlargest as _nlargest
 from collections import namedtuple as _namedtuple
+import re
 
 Match = _namedtuple('Match', 'a b size')
 
@@ -1081,8 +1082,6 @@ class Differ:
 # remaining is that perhaps it was really the case that " volatile"
 # was inserted after "private".  I can live with that <wink>.
 
-import re
-
 def IS_LINE_JUNK(line, pat=re.compile(r"\s*(?:#\s*)?$").match):
     r"""
     Return True for ignorable line: iff `line` is blank or contains a single '#'.
@@ -2090,8 +2089,9 @@ def restore(delta, which):
             yield line[2:]
 
 def _test():
-    import doctest, difflib
-    return doctest.testmod(difflib)
+    import doctest
+    import mdifflib
+    return doctest.testmod(mdifflib)
 
 if __name__ == "__main__":
     _test()
