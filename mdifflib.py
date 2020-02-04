@@ -30,13 +30,45 @@ __all__ = ['get_close_matches', 'ndiff', 'restore', 'SequenceMatcher',
            'Differ','IS_CHARACTER_JUNK', 'IS_LINE_JUNK', 'context_diff',
            'unified_diff', 'diff_bytes', 'HtmlDiff', 'Match']
 
+from typing import Callable
+from typing import Dict
+from typing import Iterable
+from typing import List
+from typing import NamedTuple
+from typing import Optional
+from typing import Set
+from typing import Tuple
+from typing import TypeVar
+
 from heapq import nlargest as _nlargest
 from collections import namedtuple as _namedtuple
 import re
 
-Match = _namedtuple('Match', 'a b size')
+TSeq = str
+TElem = str
+TReslt = str
+TTag = str
+EditOp = str
+TTT = TypeVar('TTT')
+OpCode = Tuple[EditOp, int, int, int, int]
 
-def _calculate_ratio(matches, length):
+def _enumerate(iterable: Optional[Iterable[TTT]],
+               start: int = 0) -> Iterable[Tuple[int, TTT]]:
+    if iterable is None:
+        return
+    for elem in iterable:
+        yield (start, elem)
+        start += 1
+
+
+#Match = _namedtuple('Match', 'a b size')
+class Match(NamedTuple):
+    a: int
+    b: int
+    size: int
+
+
+def _calculate_ratio(matches: int, length: int) -> float:
     if length:
         return 2.0 * matches / length
     return 1.0
@@ -149,7 +181,7 @@ class SequenceMatcher:
         Return an upper bound on ratio() very quickly.
     """
 
-    def __init__(self, isjunk=None, a='', b='', autojunk=True):
+    def __init__(self, isjunk: Optional[Callable[[TElem], bool]] = None, a: TSeq = '', b: TSeq = '', autojunk: bool = True):
         """Construct a SequenceMatcher.
 
         Optional arg isjunk is None (the default), or a one-argument
@@ -209,11 +241,12 @@ class SequenceMatcher:
         #      nonjunk items in b treated as junk by the heuristic (if used).
 
         self.isjunk = isjunk
-        self.a = self.b = None
+        self.a: Optional[TSeq] = None
+        self.b: Optional[TSeq] = None
         self.autojunk = autojunk
         self.set_seqs(a, b)
 
-    def set_seqs(self, a, b):
+    def set_seqs(self, a: TSeq, b: TSeq) -> None:
         """Set the two sequences to be compared.
 
         >>> s = SequenceMatcher()
@@ -225,7 +258,7 @@ class SequenceMatcher:
         self.set_seq1(a)
         self.set_seq2(b)
 
-    def set_seq1(self, a):
+    def set_seq1(self, a: TSeq) -> None:
         """Set the first sequence to be compared.
 
         The second sequence to be compared is not changed.
@@ -249,9 +282,10 @@ class SequenceMatcher:
         if a is self.a:
             return
         self.a = a
-        self.matching_blocks = self.opcodes = None
+        self.opcodes: Optional[List[OpCode]] = None
+        self.matching_blocks: Optional[List[Match]] = None
 
-    def set_seq2(self, b):
+    def set_seq2(self, b: TSeq) -> None:
         """Set the second sequence to be compared.
 
         The first sequence to be compared is not changed.
@@ -275,8 +309,9 @@ class SequenceMatcher:
         if b is self.b:
             return
         self.b = b
-        self.matching_blocks = self.opcodes = None
-        self.fullbcount = None
+        self.opcodes = None
+        self.matching_blocks = None
+        self.fullbcount: Optional[Dict[TElem, int]] = None
         self.__chain_b()
 
     # For each element x in b, set b2j[x] to a list of the indices in
@@ -295,7 +330,7 @@ class SequenceMatcher:
     # kinds of matches, it's best to call set_seq2 once, then set_seq1
     # repeatedly
 
-    def __chain_b(self):
+    def __chain_b(self) -> None:
         # Because isjunk is a user-defined (not C) function, and we test
         # for junk a LOT, it's important to minimize the number of calls.
         # Before the tricks described here, __chain_b was by far the most
@@ -306,15 +341,18 @@ class SequenceMatcher:
         # of junk.  I.e., we don't call isjunk at all yet.  Throwing
         # out the junk later is much cheaper than building b2j "right"
         # from the start.
+        assert self.b is not None
         b = self.b
-        self.b2j = b2j = {}
+        b2j: Dict[TElem, List[int]] = {}
+        self.b2j: Dict[TElem, List[int]] = b2j
 
-        for i, elt in enumerate(b):
+        for i, elt in _enumerate(b):
             indices = b2j.setdefault(elt, [])
             indices.append(i)
 
         # Purge junk elements
-        self.bjunk = junk = set()
+        junk: Set[TElem] = set()
+        self.bjunk: Set[TElem] = junk
         isjunk = self.isjunk
         if isjunk:
             for elt in b2j.keys():
@@ -324,7 +362,8 @@ class SequenceMatcher:
                 del b2j[elt]
 
         # Purge popular elements that are not junk
-        self.bpopular = popular = set()
+        popular: Set[TElem] = set()
+        self.bpopular: Set[TElem] = popular
         n = len(b)
         if self.autojunk and n >= 200:
             ntest = n // 100 + 1
@@ -334,7 +373,7 @@ class SequenceMatcher:
             for elt in popular: # ditto; as fast for 1% deletion
                 del b2j[elt]
 
-    def find_longest_match(self, alo, ahi, blo, bhi):
+    def find_longest_match(self, alo: int, ahi: int, blo: int, bhi: int) -> Match:
         """Find longest matching block in a[alo:ahi] and b[blo:bhi].
 
         If isjunk is not defined:
@@ -390,13 +429,15 @@ class SequenceMatcher:
         # Windiff ends up at the same place as diff, but by pairing up
         # the unique 'b's and then matching the first two 'a's.
 
+        assert self.a is not None
+        assert self.b is not None
         a, b, b2j, isbjunk = self.a, self.b, self.b2j, self.bjunk.__contains__
         besti, bestj, bestsize = alo, blo, 0
         # find longest junk-free match
         # during an iteration of the loop, j2len[j] = length of longest
         # junk-free match ending with a[i-1] and b[j]
-        j2len = {}
-        nothing = []
+        j2len: Dict[int, int] = {}
+        nothing: List[int] = []
         for i in range(alo, ahi):
             # look at all instances of a[i] in b; note that because
             # b2j has no junk keys, the loop is skipped if a[i] is junk
@@ -444,7 +485,7 @@ class SequenceMatcher:
 
         return Match(besti, bestj, bestsize)
 
-    def get_matching_blocks(self):
+    def get_matching_blocks(self) -> List[Match]:
         """Return list of triples describing matching subsequences.
 
         Each triple is of the form (i, j, n), and means that
@@ -463,6 +504,8 @@ class SequenceMatcher:
         [Match(a=0, b=0, size=2), Match(a=3, b=2, size=2), Match(a=5, b=4, size=0)]
         """
 
+        assert self.a is not None
+        assert self.b is not None
         if self.matching_blocks is not None:
             return self.matching_blocks
         la, lb = len(self.a), len(self.b)
@@ -474,7 +517,7 @@ class SequenceMatcher:
         # results to `matching_blocks` in a loop; the matches are sorted
         # at the end.
         queue = [(0, la, 0, lb)]
-        matching_blocks = []
+        matching_blocks: List[Match] = []
         while queue:
             alo, ahi, blo, bhi = queue.pop()
             i, j, k = x = self.find_longest_match(alo, ahi, blo, bhi)
@@ -515,7 +558,7 @@ class SequenceMatcher:
         self.matching_blocks = list(map(Match._make, non_adjacent))
         return self.matching_blocks
 
-    def get_opcodes(self):
+    def get_opcodes(self) -> List[OpCode]:
         """Return list of 5-tuples describing how to turn a into b.
 
         Each tuple is of the form (tag, i1, i2, j1, j2).  The first tuple
@@ -547,7 +590,8 @@ class SequenceMatcher:
         if self.opcodes is not None:
             return self.opcodes
         i = j = 0
-        self.opcodes = answer = []
+        answer: List[OpCode] = []
+        self.opcodes = answer
         for ai, bj, size in self.get_matching_blocks():
             # invariant:  we've pumped out correct diffs to change
             # a[:i] into b[:j], and the next matching block is
@@ -570,7 +614,7 @@ class SequenceMatcher:
                 answer.append( ('equal', ai, i, bj, j) )
         return answer
 
-    def get_grouped_opcodes(self, n=3):
+    def get_grouped_opcodes(self, n: int = 3) -> Iterable[List[OpCode]]:
         """ Isolate change clusters by eliminating ranges with no changes.
 
         Return a generator of groups with up to n lines of context.
@@ -607,7 +651,7 @@ class SequenceMatcher:
             codes[-1] = tag, i1, min(i2, i1+n), j1, min(j2, j1+n)
 
         nn = n + n
-        group = []
+        group: List[OpCode] = []
         for tag, i1, i2, j1, j2 in codes:
             # End the current group and start a new one whenever
             # there is a large range with no changes.
@@ -620,7 +664,7 @@ class SequenceMatcher:
         if group and not (len(group)==1 and group[0][0] == 'equal'):
             yield group
 
-    def ratio(self):
+    def ratio(self) -> float:
         """Return a measure of the sequences' similarity (float in [0,1]).
 
         Where T is the total number of elements in both sequences, and
@@ -642,10 +686,12 @@ class SequenceMatcher:
         1.0
         """
 
+        assert self.a is not None
+        assert self.b is not None
         matches = sum(triple[-1] for triple in self.get_matching_blocks())
         return _calculate_ratio(matches, len(self.a) + len(self.b))
 
-    def quick_ratio(self):
+    def quick_ratio(self) -> float:
         """Return an upper bound on ratio() relatively quickly.
 
         This isn't defined beyond that it is an upper bound on .ratio(), and
@@ -656,14 +702,17 @@ class SequenceMatcher:
         # of their intersection; this counts the number of matches
         # without regard to order, so is clearly an upper bound
         if self.fullbcount is None:
-            self.fullbcount = fullbcount = {}
+            fullbcount: Dict[TElem, int] = {}
+            self.fullbcount = fullbcount
+            assert self.b is not None
             for elt in self.b:
                 fullbcount[elt] = fullbcount.get(elt, 0) + 1
         fullbcount = self.fullbcount
         # avail[x] is the number of times x appears in 'b' less the
         # number of times we've seen it in 'a' so far ... kinda
-        avail = {}
+        avail: Dict[TElem, int] = {}
         availhas, matches = avail.__contains__, 0
+        assert self.a is not None
         for elt in self.a:
             if availhas(elt):
                 numb = avail[elt]
@@ -672,21 +721,27 @@ class SequenceMatcher:
             avail[elt] = numb - 1
             if numb > 0:
                 matches = matches + 1
+        assert self.b is not None
         return _calculate_ratio(matches, len(self.a) + len(self.b))
 
-    def real_quick_ratio(self):
+    def real_quick_ratio(self) -> float:
         """Return an upper bound on ratio() very quickly.
 
         This isn't defined beyond that it is an upper bound on .ratio(), and
         is faster to compute than either .ratio() or .quick_ratio().
         """
 
+        assert self.a is not None
+        assert self.b is not None
         la, lb = len(self.a), len(self.b)
         # can't have more matches than the number of elements in the
         # shorter sequence
         return _calculate_ratio(min(la, lb), la + lb)
 
-def get_close_matches(word, possibilities, n=3, cutoff=0.6):
+def get_close_matches(word: TSeq,
+                      possibilities: List[TSeq],
+                      n: int = 3,
+                      cutoff: float = 0.6) -> List[TSeq]:
     """Use SequenceMatcher to return list of the best "good enough" matches.
 
     word is a sequence for which close matches are desired (typically a
@@ -719,7 +774,7 @@ def get_close_matches(word, possibilities, n=3, cutoff=0.6):
         raise ValueError("n must be > 0: %r" % (n,))
     if not 0.0 <= cutoff <= 1.0:
         raise ValueError("cutoff must be in [0.0, 1.0]: %r" % (cutoff,))
-    result = []
+    result: List[Tuple[float, TSeq]] = []
     s = SequenceMatcher()
     s.set_seq2(word)
     for x in possibilities:
@@ -734,7 +789,7 @@ def get_close_matches(word, possibilities, n=3, cutoff=0.6):
     # Strip scores for the best n matches
     return [x for score, x in result]
 
-def _count_leading(line, ch):
+def _count_leading(line: TSeq, ch: TElem) -> int:
     """
     Return number of `ch` characters at the start of `line`.
 
@@ -843,7 +898,7 @@ class Differ:
         Compare two sequences of lines; generate the resulting delta.
     """
 
-    def __init__(self, linejunk=None, charjunk=None):
+    def __init__(self, linejunk: Optional[Callable[[TElem], bool]] = None, charjunk: Optional[Callable[[TElem], bool]] = None):
         """
         Construct a text differencer, with optional filters.
 
@@ -866,7 +921,7 @@ class Differ:
         self.linejunk = linejunk
         self.charjunk = charjunk
 
-    def compare(self, a, b):
+    def compare(self, a: TSeq, b: TSeq) -> Iterable[TReslt]:
         r"""
         Compare two sequences of lines; generate the resulting delta.
 
@@ -907,12 +962,12 @@ class Differ:
 
             yield from g
 
-    def _dump(self, tag, x, lo, hi):
+    def _dump(self, tag: str, x: TSeq, lo: int, hi: int) -> Iterable[TReslt]:
         """Generate comparison results for a same-tagged range."""
         for i in range(lo, hi):
             yield '%s %s' % (tag, x[i])
 
-    def _plain_replace(self, a, alo, ahi, b, blo, bhi):
+    def _plain_replace(self, a: TSeq, alo: int, ahi: int, b: TSeq, blo: int, bhi: int) -> Iterable[TReslt]:
         assert alo < ahi and blo < bhi
         # dump the shorter block first -- reduces the burden on short-term
         # memory if the blocks are of very different sizes
@@ -926,7 +981,7 @@ class Differ:
         for g in first, second:
             yield from g
 
-    def _fancy_replace(self, a, alo, ahi, b, blo, bhi):
+    def _fancy_replace(self, a: TSeq, alo: int, ahi: int, b: TSeq, blo: int, bhi: int) -> Iterable[TReslt]:
         r"""
         When replacing one block of lines with another, search the blocks
         for *similar* lines; the best-matching pair (if any) is used as a
@@ -981,6 +1036,8 @@ class Differ:
                 yield from self._plain_replace(a, alo, ahi, b, blo, bhi)
                 return
             # no close pair, but an identical pair -- synch up on that
+            assert eqi is not None
+            assert eqj is not None
             best_i, best_j, best_ratio = eqi, eqj, 1.0
         else:
             # there's a close pair, so forget the identical pair (if any)
@@ -1020,8 +1077,8 @@ class Differ:
         # pump out diffs from after the synch point
         yield from self._fancy_helper(a, best_i+1, ahi, b, best_j+1, bhi)
 
-    def _fancy_helper(self, a, alo, ahi, b, blo, bhi):
-        g = []
+    def _fancy_helper(self, a: TSeq, alo: int, ahi: int, b: TSeq, blo: int, bhi: int) -> Iterable[TReslt]:
+        g: Iterable[TReslt] = []
         if alo < ahi:
             if blo < bhi:
                 g = self._fancy_replace(a, alo, ahi, b, blo, bhi)
@@ -1032,7 +1089,7 @@ class Differ:
 
         yield from g
 
-    def _qformat(self, aline, bline, atags, btags):
+    def _qformat(self, aline: TSeq, bline: TSeq, atags: TTag, btags: TTag) -> Iterable[TReslt]:
         r"""
         Format "?" output and deal with leading tabs.
 
@@ -1121,7 +1178,7 @@ def IS_CHARACTER_JUNK(ch, ws=" \t"):
 ###  Unified Diff
 ########################################################################
 
-def _format_range_unified(start, stop):
+def _format_range_unified(start: int, stop: int) -> TReslt:
     'Convert range to the "ed" format'
     # Per the diff spec at http://www.unix.org/single_unix_specification/
     beginning = start + 1     # lines start numbering with one
@@ -1132,8 +1189,8 @@ def _format_range_unified(start, stop):
         beginning -= 1        # empty ranges begin at line just before the range
     return '{},{}'.format(beginning, length)
 
-def unified_diff(a, b, fromfile='', tofile='', fromfiledate='',
-                 tofiledate='', n=3, lineterm='\n'):
+def unified_diff(a: TSeq, b: TSeq, fromfile: str = '', tofile: str = '', fromfiledate: str = '',
+                 tofiledate: str = '', n: int = 3, lineterm: TElem = '\n') -> Iterable[TReslt]:
     r"""
     Compare two sequences of lines; generate the delta as a unified diff.
 
@@ -1205,7 +1262,7 @@ def unified_diff(a, b, fromfile='', tofile='', fromfiledate='',
 ###  Context Diff
 ########################################################################
 
-def _format_range_context(start, stop):
+def _format_range_context(start: int, stop: int) -> TReslt:
     'Convert range to the "ed" format'
     # Per the diff spec at http://www.unix.org/single_unix_specification/
     beginning = start + 1     # lines start numbering with one
@@ -1217,8 +1274,8 @@ def _format_range_context(start, stop):
     return '{},{}'.format(beginning, beginning + length - 1)
 
 # See http://www.unix.org/single_unix_specification/
-def context_diff(a, b, fromfile='', tofile='',
-                 fromfiledate='', tofiledate='', n=3, lineterm='\n'):
+def context_diff(a: TSeq, b: TSeq, fromfile: str = '', tofile: str = '',
+                 fromfiledate: str = '', tofiledate: str = '', n: int = 3, lineterm: TElem = '\n') -> Iterable[TReslt]:
     r"""
     Compare two sequences of lines; generate the delta as a context diff.
 
@@ -1293,7 +1350,7 @@ def context_diff(a, b, fromfile='', tofile='',
                     for line in b[j1:j2]:
                         yield prefix[tag] + line
 
-def _check_types(a, b, *args):
+def _check_types(a: TSeq, b: TSeq, *args: str) -> None:
     # Checking types is weird, but the alternative is garbled output when
     # someone passes mixed bytes and str to {unified,context}_diff(). E.g.
     # without this check, passing filenames as bytes results in output like
@@ -1310,8 +1367,8 @@ def _check_types(a, b, *args):
         if not isinstance(arg, str):
             raise TypeError('all arguments must be str, not: %r' % (arg,))
 
-def diff_bytes(dfunc, a, b, fromfile=b'', tofile=b'',
-               fromfiledate=b'', tofiledate=b'', n=3, lineterm=b'\n'):
+def diff_bytes(dfunc: Callable[[Iterable[TSeq], Iterable[TSeq], str, str, str, str, int, Iterable[TSeq]], Iterable[TReslt]], a: Iterable[bytes], b: Iterable[bytes], fromfile: bytes = b'', tofile: bytes = b'',
+               fromfiledate: bytes = b'', tofiledate: bytes = b'', n: int = 3, lineterm: bytes = b'\n') -> Iterable[bytes]:
     r"""
     Compare `a` and `b`, two sequences of lines represented as bytes rather
     than str. This is a wrapper for `dfunc`, which is typically either
@@ -1321,22 +1378,22 @@ def diff_bytes(dfunc, a, b, fromfile=b'', tofile=b'',
     unknown or inconsistent encoding. All other inputs (except `n`) must be
     bytes rather than str.
     """
-    def decode(s):
+    def decode(s: bytes) -> str:
         try:
             return s.decode('ascii', 'surrogateescape')
         except AttributeError as err:
             msg = ('all arguments must be bytes, not %s (%r)' %
                    (type(s).__name__, s))
             raise TypeError(msg) from err
-    a = list(map(decode, a))
-    b = list(map(decode, b))
-    fromfile = decode(fromfile)
-    tofile = decode(tofile)
-    fromfiledate = decode(fromfiledate)
-    tofiledate = decode(tofiledate)
-    lineterm = decode(lineterm)
+    a_ = list(map(decode, a))
+    b_ = list(map(decode, b))
+    fromfile_ = decode(fromfile)
+    tofile_ = decode(tofile)
+    fromfiledate_ = decode(fromfiledate)
+    tofiledate_ = decode(tofiledate)
+    lineterm_ = decode(lineterm)
 
-    lines = dfunc(a, b, fromfile, tofile, fromfiledate, tofiledate, n, lineterm)
+    lines = dfunc(a_, b_, fromfile_, tofile_, fromfiledate_, tofiledate_, n, lineterm_)
     for line in lines:
         yield line.encode('ascii', 'surrogateescape')
 
@@ -1941,7 +1998,7 @@ class HtmlDiff(object):
         next_href = ['']*len(flaglist)
         num_chg, in_change = 0, False
         last = 0
-        for i,flag in enumerate(flaglist):
+        for i,flag in _enumerate(flaglist):
             if flag:
                 if not in_change:
                     in_change = True
