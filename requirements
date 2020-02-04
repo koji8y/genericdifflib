@@ -1,0 +1,4 @@
+# Required to check code quality:
+mypy
+flake8
+pylint
