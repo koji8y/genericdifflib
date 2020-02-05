@@ -52,11 +52,26 @@ TSeq = str
 TElem = str
 #TReslt = str
 TTag = str
-EditOp = str
+#EditOp = str
 TTT = TypeVar('TTT')
+
+class EditOp(Enum):
+    Replace = "Replace"
+    Delete = "Delete"
+    Insert = "Insert"
+    Equal = "Equal"
+
+    def __bool__(self) -> bool:
+        return self.value != self.Equal
+
+    def __str__(self) -> str:
+        return self.value
+
+    def __repr__(self) -> str:
+        return self.value
+
 OpCode = Tuple[EditOp, int, int, int, int]
 
-#class EditOp(Enum)
 class Result:
     def __init__(self, edit_op: EditOp, target: TElem):
         self.edit_op = edit_op
@@ -628,20 +643,20 @@ class SequenceMatcher:
             # a[ai:ai+size] == b[bj:bj+size].  So we need to pump
             # out a diff to change a[i:ai] into b[j:bj], pump out
             # the matching block, and move (i,j) beyond the match
-            tag = ''
+            tag: EditOp = EditOp.Equal
             if i < ai and j < bj:
-                tag = 'replace'
+                tag = EditOp.Replace
             elif i < ai:
-                tag = 'delete'
+                tag = EditOp.Delete
             elif j < bj:
-                tag = 'insert'
+                tag = EditOp.Insert
             if tag:
                 answer.append( (tag, i, ai, j, bj) )
             i, j = ai+size, bj+size
             # the list of matching blocks is terminated by a
             # sentinel with size 0
             if size:
-                answer.append( ('equal', ai, i, bj, j) )
+                answer.append( (EditOp.Equal, ai, i, bj, j) )
         return answer
 
     def get_grouped_opcodes(self, n: int = 3) -> Iterable[List[OpCode]]:
@@ -671,12 +686,12 @@ class SequenceMatcher:
 
         codes = self.get_opcodes()
         if not codes:
-            codes = [("equal", 0, 1, 0, 1)]
+            codes = [(EditOp.Equal, 0, 1, 0, 1)]
         # Fixup leading and trailing groups if they show no changes.
-        if codes[0][0] == 'equal':
+        if codes[0][0] == EditOp.Equal:
             tag, i1, i2, j1, j2 = codes[0]
             codes[0] = tag, max(i1, i2-n), i2, max(j1, j2-n), j2
-        if codes[-1][0] == 'equal':
+        if codes[-1][0] == EditOp.Equal:
             tag, i1, i2, j1, j2 = codes[-1]
             codes[-1] = tag, i1, min(i2, i1+n), j1, min(j2, j1+n)
 
@@ -685,13 +700,13 @@ class SequenceMatcher:
         for tag, i1, i2, j1, j2 in codes:
             # End the current group and start a new one whenever
             # there is a large range with no changes.
-            if tag == 'equal' and i2-i1 > nn:
+            if tag == EditOp.Equal and i2-i1 > nn:
                 group.append((tag, i1, min(i2, i1+n), j1, min(j2, j1+n)))
                 yield group
                 group = []
                 i1, j1 = max(i1, i2-n), max(j1, j2-n)
             group.append((tag, i1, i2, j1 ,j2))
-        if group and not (len(group)==1 and group[0][0] == 'equal'):
+        if group and not (len(group)==1 and group[0][0] == EditOp.Equal):
             yield group
 
     def ratio(self) -> float:
@@ -979,20 +994,20 @@ class Differ:
 
         cruncher = SequenceMatcher(self.linejunk, a, b)
         for tag, alo, ahi, blo, bhi in cruncher.get_opcodes():
-            if tag == 'replace':
+            if tag == EditOp.Replace:
                 g = self._fancy_replace(a, alo, ahi, b, blo, bhi)
-            elif tag == 'delete':
-                g = self._dump('-', a, alo, ahi)
-            elif tag == 'insert':
-                g = self._dump('+', b, blo, bhi)
-            elif tag == 'equal':
-                g = self._dump(' ', a, alo, ahi)
+            elif tag == EditOp.Delete:
+                g = self._dump(tag, a, alo, ahi)
+            elif tag == EditOp.Insert:
+                g = self._dump(tag, b, blo, bhi)
+            elif tag == EditOp.Equal:
+                g = self._dump(tag, a, alo, ahi)
             else:
                 raise ValueError('unknown tag %r' % (tag,))
 
             yield from g
 
-    def _dump(self, tag: str, x: TSeq, lo: int, hi: int) -> Iterable[TReslt]:
+    def _dump(self, tag: EditOp, x: TSeq, lo: int, hi: int) -> Iterable[TReslt]:
         """Generate comparison results for a same-tagged range."""
         for i in range(lo, hi):
             # (sv) yield '%s %s' % (tag, x[i])
@@ -1003,11 +1018,11 @@ class Differ:
         # dump the shorter block first -- reduces the burden on short-term
         # memory if the blocks are of very different sizes
         if bhi - blo < ahi - alo:
-            first  = self._dump('+', b, blo, bhi)
-            second = self._dump('-', a, alo, ahi)
+            first  = self._dump(EditOp.Insert, b, blo, bhi)
+            second = self._dump(EditOp.Delete, a, alo, ahi)
         else:
-            first  = self._dump('-', a, alo, ahi)
-            second = self._dump('+', b, blo, bhi)
+            first  = self._dump(EditOp.Delete, a, alo, ahi)
+            second = self._dump(EditOp.Insert, b, blo, bhi)
 
         for g in first, second:
             yield from g
@@ -1104,7 +1119,7 @@ class Differ:
         else:
             # the synch pair is identical
             #yield '  ' + aelt
-            yield Result(' ', aelt)
+            yield Result(EditOp.Equal, aelt)
 
         # pump out diffs from after the synch point
         yield from self._fancy_helper(a, best_i+1, ahi, b, best_j+1, bhi)
@@ -1115,9 +1130,9 @@ class Differ:
             if blo < bhi:
                 g = self._fancy_replace(a, alo, ahi, b, blo, bhi)
             else:
-                g = self._dump('-', a, alo, ahi)
+                g = self._dump(EditOp.Delete, a, alo, ahi)
         elif blo < bhi:
-            g = self._dump('+', b, blo, bhi)
+            g = self._dump(EditOp.Insert, b, blo, bhi)
 
         yield from g
 
@@ -1146,11 +1161,11 @@ class Differ:
         atags = atags[common:].rstrip()
         btags = btags[common:].rstrip()
 
-        yield Result("-", aline)
+        yield Result(EditOp.Delete, aline)
         if atags:
             yield Tags("? %s%s\n" % ("\t" * common, atags))
 
-        yield Result("+", bline)
+        yield Result(EditOp.Insert, bline)
         if btags:
             yield Tags("? %s%s\n" % ("\t" * common, btags))
 
@@ -1278,16 +1293,16 @@ def unified_diff(a: TSeq, b: TSeq, fromfile: str = '', tofile: str = '', fromfil
         yield Message('@@ -{} +{} @@{}'.format(file1_range, file2_range, lineterm))
 
         for tag, i1, i2, j1, j2 in group:
-            if tag == 'equal':
+            if tag == EditOp.Equal:
                 for line in a[i1:i2]:
-                    yield Result(' ', line)
+                    yield Result(EditOp.Equal, line)
                 continue
-            if tag in {'replace', 'delete'}:
+            if tag in {EditOp.Replace, EditOp.Delete}:
                 for line in a[i1:i2]:
-                    yield Result('-', line)
-            if tag in {'replace', 'insert'}:
+                    yield Result(EditOp.Delete, line)
+            if tag in {EditOp.Replace, EditOp.Insert}:
                 for line in b[j1:j2]:
-                    yield Result('+', line)
+                    yield Result(EditOp.Insert, line)
 
 
 ########################################################################
@@ -1351,7 +1366,7 @@ def context_diff(a: TSeq, b: TSeq, fromfile: str = '', tofile: str = '',
     """
 
     _check_types(a, b, fromfile, tofile, fromfiledate, tofiledate, lineterm)
-    prefix = dict(insert='+ ', delete='- ', replace='! ', equal='  ')
+    #prefix = dict(insert='+ ', delete='- ', replace='! ', equal='  ')
     started = False
     for group in SequenceMatcher(None,a,b).get_grouped_opcodes(n):
         if not started:
@@ -1367,20 +1382,20 @@ def context_diff(a: TSeq, b: TSeq, fromfile: str = '', tofile: str = '',
         file1_range = _format_range_context(first[1], last[2])
         yield Message('*** {} ****{}'.format(file1_range, lineterm))
 
-        if any(tag in {'replace', 'delete'} for tag, _, _, _, _ in group):
+        if any(tag in {EditOp.Replace, EditOp.Delete} for tag, _, _, _, _ in group):
             for tag, i1, i2, _, _ in group:
-                if tag != 'insert':
+                if tag != EditOp.Insert:
                     for line in a[i1:i2]:
-                        yield Result(prefix[tag], line)
+                        yield Result(tag, line)
 
         file2_range = _format_range_context(first[3], last[4])
         yield Message('--- {} ----{}'.format(file2_range, lineterm))
 
-        if any(tag in {'replace', 'insert'} for tag, _, _, _, _ in group):
+        if any(tag in {EditOp.Replace, EditOp.Insert} for tag, _, _, _, _ in group):
             for tag, _, _, j1, j2 in group:
-                if tag != 'delete':
+                if tag != EditOp.Delete:
                     for line in b[j1:j2]:
-                        yield Message(prefix[tag] + line)
+                        yield Result(tag, line)
 
 def _check_types(a: TSeq, b: TSeq, *args: str) -> None:
     # Checking types is weird, but the alternative is garbled output when
