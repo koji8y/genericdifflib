@@ -28,7 +28,9 @@ Class HtmlDiff:
 
 __all__ = ['get_close_matches', 'ndiff', 'restore', 'SequenceMatcher',
            'Differ','IS_CHARACTER_JUNK', 'IS_LINE_JUNK', 'context_diff',
-           'unified_diff', 'diff_bytes', 'HtmlDiff', 'Match']
+           'unified_diff',
+           #'diff_bytes',
+           'HtmlDiff', 'Match']
 
 from typing import Callable
 from typing import Dict
@@ -39,18 +41,46 @@ from typing import Optional
 from typing import Set
 from typing import Tuple
 from typing import TypeVar
+from typing import Union
 
+from enum import Enum
 from heapq import nlargest as _nlargest
 from collections import namedtuple as _namedtuple
 import re
 
 TSeq = str
 TElem = str
-TReslt = str
+#TReslt = str
 TTag = str
 EditOp = str
 TTT = TypeVar('TTT')
 OpCode = Tuple[EditOp, int, int, int, int]
+
+#class EditOp(Enum)
+class Result:
+    def __init__(self, edit_op: EditOp, target: TElem):
+        self.edit_op = edit_op
+        self.target = target
+
+    def __repr__(self) -> str:
+        return '[{}]{}'.format(self.edit_op, self.target)
+
+class Message:
+    def __init__(self, message: str):
+        self.message = message
+
+    def __repr__(self) -> str:
+        return self.message
+
+class Tags:
+    def __init__(self, tags: str):
+        self.tags = tags
+
+    def __repr__(self) -> str:
+        return self.tags
+
+
+TReslt = Union[Result, Message, Tags]
 
 def _enumerate(iterable: Optional[Iterable[TTT]],
                start: int = 0) -> Iterable[Tuple[int, TTT]]:
@@ -965,7 +995,8 @@ class Differ:
     def _dump(self, tag: str, x: TSeq, lo: int, hi: int) -> Iterable[TReslt]:
         """Generate comparison results for a same-tagged range."""
         for i in range(lo, hi):
-            yield '%s %s' % (tag, x[i])
+            # (sv) yield '%s %s' % (tag, x[i])
+            yield Result(tag, x[i])
 
     def _plain_replace(self, a: TSeq, alo: int, ahi: int, b: TSeq, blo: int, bhi: int) -> Iterable[TReslt]:
         assert alo < ahi and blo < bhi
@@ -1072,7 +1103,8 @@ class Differ:
             yield from self._qformat(aelt, belt, atags, btags)
         else:
             # the synch pair is identical
-            yield '  ' + aelt
+            #yield '  ' + aelt
+            yield Result(' ', aelt)
 
         # pump out diffs from after the synch point
         yield from self._fancy_helper(a, best_i+1, ahi, b, best_j+1, bhi)
@@ -1114,13 +1146,13 @@ class Differ:
         atags = atags[common:].rstrip()
         btags = btags[common:].rstrip()
 
-        yield "- " + aline
+        yield Result("-", aline)
         if atags:
-            yield "? %s%s\n" % ("\t" * common, atags)
+            yield Tags("? %s%s\n" % ("\t" * common, atags))
 
-        yield "+ " + bline
+        yield Result("+", bline)
         if btags:
-            yield "? %s%s\n" % ("\t" * common, btags)
+            yield Tags("? %s%s\n" % ("\t" * common, btags))
 
 # With respect to junk, an earlier version of ndiff simply refused to
 # *start* a match with a junk element.  The result was cases like this:
@@ -1184,10 +1216,10 @@ def _format_range_unified(start: int, stop: int) -> TReslt:
     beginning = start + 1     # lines start numbering with one
     length = stop - start
     if length == 1:
-        return '{}'.format(beginning)
+        return Message('{}'.format(beginning))
     if not length:
         beginning -= 1        # empty ranges begin at line just before the range
-    return '{},{}'.format(beginning, length)
+    return Message('{},{}'.format(beginning, length))
 
 def unified_diff(a: TSeq, b: TSeq, fromfile: str = '', tofile: str = '', fromfiledate: str = '',
                  tofiledate: str = '', n: int = 3, lineterm: TElem = '\n') -> Iterable[TReslt]:
@@ -1237,25 +1269,25 @@ def unified_diff(a: TSeq, b: TSeq, fromfile: str = '', tofile: str = '', fromfil
             started = True
             fromdate = '\t{}'.format(fromfiledate) if fromfiledate else ''
             todate = '\t{}'.format(tofiledate) if tofiledate else ''
-            yield '--- {}{}{}'.format(fromfile, fromdate, lineterm)
-            yield '+++ {}{}{}'.format(tofile, todate, lineterm)
+            yield Message('--- {}{}{}'.format(fromfile, fromdate, lineterm))
+            yield Message('+++ {}{}{}'.format(tofile, todate, lineterm))
 
         first, last = group[0], group[-1]
         file1_range = _format_range_unified(first[1], last[2])
         file2_range = _format_range_unified(first[3], last[4])
-        yield '@@ -{} +{} @@{}'.format(file1_range, file2_range, lineterm)
+        yield Message('@@ -{} +{} @@{}'.format(file1_range, file2_range, lineterm))
 
         for tag, i1, i2, j1, j2 in group:
             if tag == 'equal':
                 for line in a[i1:i2]:
-                    yield ' ' + line
+                    yield Result(' ', line)
                 continue
             if tag in {'replace', 'delete'}:
                 for line in a[i1:i2]:
-                    yield '-' + line
+                    yield Result('-', line)
             if tag in {'replace', 'insert'}:
                 for line in b[j1:j2]:
-                    yield '+' + line
+                    yield Result('+', line)
 
 
 ########################################################################
@@ -1270,8 +1302,8 @@ def _format_range_context(start: int, stop: int) -> TReslt:
     if not length:
         beginning -= 1        # empty ranges begin at line just before the range
     if length <= 1:
-        return '{}'.format(beginning)
-    return '{},{}'.format(beginning, beginning + length - 1)
+        return Message('{}'.format(beginning))
+    return Message('{},{}'.format(beginning, beginning + length - 1))
 
 # See http://www.unix.org/single_unix_specification/
 def context_diff(a: TSeq, b: TSeq, fromfile: str = '', tofile: str = '',
@@ -1326,29 +1358,29 @@ def context_diff(a: TSeq, b: TSeq, fromfile: str = '', tofile: str = '',
             started = True
             fromdate = '\t{}'.format(fromfiledate) if fromfiledate else ''
             todate = '\t{}'.format(tofiledate) if tofiledate else ''
-            yield '*** {}{}{}'.format(fromfile, fromdate, lineterm)
-            yield '--- {}{}{}'.format(tofile, todate, lineterm)
+            yield Message('*** {}{}{}'.format(fromfile, fromdate, lineterm))
+            yield Message('--- {}{}{}'.format(tofile, todate, lineterm))
 
         first, last = group[0], group[-1]
-        yield '***************' + lineterm
+        yield Message('***************' + lineterm)
 
         file1_range = _format_range_context(first[1], last[2])
-        yield '*** {} ****{}'.format(file1_range, lineterm)
+        yield Message('*** {} ****{}'.format(file1_range, lineterm))
 
         if any(tag in {'replace', 'delete'} for tag, _, _, _, _ in group):
             for tag, i1, i2, _, _ in group:
                 if tag != 'insert':
                     for line in a[i1:i2]:
-                        yield prefix[tag] + line
+                        yield Result(prefix[tag], line)
 
         file2_range = _format_range_context(first[3], last[4])
-        yield '--- {} ----{}'.format(file2_range, lineterm)
+        yield Message('--- {} ----{}'.format(file2_range, lineterm))
 
         if any(tag in {'replace', 'insert'} for tag, _, _, _, _ in group):
             for tag, _, _, j1, j2 in group:
                 if tag != 'delete':
                     for line in b[j1:j2]:
-                        yield prefix[tag] + line
+                        yield Message(prefix[tag] + line)
 
 def _check_types(a: TSeq, b: TSeq, *args: str) -> None:
     # Checking types is weird, but the alternative is garbled output when
@@ -1367,35 +1399,35 @@ def _check_types(a: TSeq, b: TSeq, *args: str) -> None:
         if not isinstance(arg, str):
             raise TypeError('all arguments must be str, not: %r' % (arg,))
 
-def diff_bytes(dfunc: Callable[[Iterable[TSeq], Iterable[TSeq], str, str, str, str, int, Iterable[TSeq]], Iterable[TReslt]], a: Iterable[bytes], b: Iterable[bytes], fromfile: bytes = b'', tofile: bytes = b'',
-               fromfiledate: bytes = b'', tofiledate: bytes = b'', n: int = 3, lineterm: bytes = b'\n') -> Iterable[bytes]:
-    r"""
-    Compare `a` and `b`, two sequences of lines represented as bytes rather
-    than str. This is a wrapper for `dfunc`, which is typically either
-    unified_diff() or context_diff(). Inputs are losslessly converted to
-    strings so that `dfunc` only has to worry about strings, and encoded
-    back to bytes on return. This is necessary to compare files with
-    unknown or inconsistent encoding. All other inputs (except `n`) must be
-    bytes rather than str.
-    """
-    def decode(s: bytes) -> str:
-        try:
-            return s.decode('ascii', 'surrogateescape')
-        except AttributeError as err:
-            msg = ('all arguments must be bytes, not %s (%r)' %
-                   (type(s).__name__, s))
-            raise TypeError(msg) from err
-    a_ = list(map(decode, a))
-    b_ = list(map(decode, b))
-    fromfile_ = decode(fromfile)
-    tofile_ = decode(tofile)
-    fromfiledate_ = decode(fromfiledate)
-    tofiledate_ = decode(tofiledate)
-    lineterm_ = decode(lineterm)
-
-    lines = dfunc(a_, b_, fromfile_, tofile_, fromfiledate_, tofiledate_, n, lineterm_)
-    for line in lines:
-        yield line.encode('ascii', 'surrogateescape')
+#def diff_bytes(dfunc: Callable[[Iterable[TSeq], Iterable[TSeq], str, str, str, str, int, Iterable[TSeq]], Iterable[TReslt]], a: Iterable[bytes], b: Iterable[bytes], fromfile: bytes = b'', tofile: bytes = b'',
+#               fromfiledate: bytes = b'', tofiledate: bytes = b'', n: int = 3, lineterm: bytes = b'\n') -> Iterable[bytes]:
+#    r"""
+#    Compare `a` and `b`, two sequences of lines represented as bytes rather
+#    than str. This is a wrapper for `dfunc`, which is typically either
+#    unified_diff() or context_diff(). Inputs are losslessly converted to
+#    strings so that `dfunc` only has to worry about strings, and encoded
+#    back to bytes on return. This is necessary to compare files with
+#    unknown or inconsistent encoding. All other inputs (except `n`) must be
+#    bytes rather than str.
+#    """
+#    def decode(s: bytes) -> str:
+#        try:
+#            return s.decode('ascii', 'surrogateescape')
+#        except AttributeError as err:
+#            msg = ('all arguments must be bytes, not %s (%r)' %
+#                   (type(s).__name__, s))
+#            raise TypeError(msg) from err
+#    a_ = list(map(decode, a))
+#    b_ = list(map(decode, b))
+#    fromfile_ = decode(fromfile)
+#    tofile_ = decode(tofile)
+#    fromfiledate_ = decode(fromfiledate)
+#    tofiledate_ = decode(tofiledate)
+#    lineterm_ = decode(lineterm)
+#
+#    lines = dfunc(a_, b_, fromfile_, tofile_, fromfiledate_, tofiledate_, n, lineterm_)
+#    for line in lines:
+#        yield line.encode('ascii', 'surrogateescape')
 
 def ndiff(a, b, linejunk=None, charjunk=IS_CHARACTER_JUNK):
     r"""
@@ -2147,8 +2179,8 @@ def restore(delta, which):
 
 def _test():
     import doctest
-    import mdifflib
-    return doctest.testmod(mdifflib)
+    import gdifflib
+    return doctest.testmod(gdifflib)
 
 if __name__ == "__main__":
     _test()
