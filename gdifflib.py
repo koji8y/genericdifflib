@@ -36,9 +36,12 @@ from typing import Callable
 from typing import Dict
 from typing import Iterable
 from typing import List
+from typing import MutableSequence
 from typing import NamedTuple
+from typing import NewType
 from typing import Optional
 from typing import Set
+from typing import Sequence
 from typing import Tuple
 from typing import TypeVar
 from typing import Union
@@ -48,12 +51,35 @@ from heapq import nlargest as _nlargest
 from collections import namedtuple as _namedtuple
 import re
 
-TSeq = str
-TElem = str
+TElem = NewType('TElem', str)
+TSeq = Sequence[TElem]
 #TReslt = str
 TTag = str
 #EditOp = str
 TTT = TypeVar('TTT')
+
+class StringAsSequence(TSeq):
+    def __init__(self, string: str):
+        self._string = string
+
+    def __len__(self) -> int:
+        return len(self._string)
+
+    def __getitem__(self, param: Union[int, slice]):
+        return Str(self._string[param])
+
+    def __repr__(self) -> str:
+        return self._string
+
+def lift(value: Union[TSeq, TElem, str]) -> TSeq:
+    if isinstance(value, str):
+        return Str(value)
+    return value
+
+def str_elem(value: str) -> TElem:
+    return TElem(value)
+
+Str = StringAsSequence
 
 class EditOp(Enum):
     Replace = "Replace"
@@ -73,7 +99,7 @@ class EditOp(Enum):
 OpCode = Tuple[EditOp, int, int, int, int]
 
 class Result:
-    def __init__(self, edit_op: EditOp, target: TElem):
+    def __init__(self, edit_op: EditOp, target: TSeq):
         self.edit_op = edit_op
         self.target = target
 
@@ -226,7 +252,12 @@ class SequenceMatcher:
         Return an upper bound on ratio() very quickly.
     """
 
-    def __init__(self, isjunk: Optional[Callable[[TElem], bool]] = None, a: TSeq = '', b: TSeq = '', autojunk: bool = True):
+    def __init__(
+            self,
+            isjunk: Optional[Callable[[TElem], bool]] = None,
+            a: TSeq = Str(''),
+            b: TSeq = Str(''),
+            autojunk: bool = True):
         """Construct a SequenceMatcher.
 
         Optional arg isjunk is None (the default), or a one-argument
@@ -286,8 +317,8 @@ class SequenceMatcher:
         #      nonjunk items in b treated as junk by the heuristic (if used).
 
         self.isjunk = isjunk
-        self.a: Optional[TSeq] = None
-        self.b: Optional[TSeq] = None
+        self.a: TSeq = Str('')  # None
+        self.b: TSeq = Str('')  # None
         self.autojunk = autojunk
         self.set_seqs(a, b)
 
@@ -392,7 +423,7 @@ class SequenceMatcher:
         self.b2j: Dict[TElem, List[int]] = b2j
 
         for i, elt in _enumerate(b):
-            indices = b2j.setdefault(elt, [])
+            indices = b2j.setdefault(TElem(elt), [])
             indices.append(i)
 
         # Purge junk elements
@@ -1011,7 +1042,7 @@ class Differ:
         """Generate comparison results for a same-tagged range."""
         for i in range(lo, hi):
             # (sv) yield '%s %s' % (tag, x[i])
-            yield Result(tag, x[i])
+            yield Result(tag, lift(x[i]))
 
     def _plain_replace(self, a: TSeq, alo: int, ahi: int, b: TSeq, blo: int, bhi: int) -> Iterable[TReslt]:
         assert alo < ahi and blo < bhi
@@ -1057,14 +1088,14 @@ class Differ:
         # on junk -- unless we have to)
         for j in range(blo, bhi):
             bj = b[j]
-            cruncher.set_seq2(bj)
+            cruncher.set_seq2(lift(bj))
             for i in range(alo, ahi):
                 ai = a[i]
                 if ai == bj:
                     if eqi is None:
                         eqi, eqj = i, j
                     continue
-                cruncher.set_seq1(ai)
+                cruncher.set_seq1(lift(ai))
                 # computing similarity is expensive, so use the quick
                 # upper bounds first -- have seen this speed up messy
                 # compares by a factor of 3.
@@ -1100,7 +1131,7 @@ class Differ:
         if eqi is None:
             # pump out a '-', '?', '+', '?' quad for the synched lines
             atags = btags = ""
-            cruncher.set_seqs(aelt, belt)
+            cruncher.set_seqs(lift(aelt), lift(belt))
             for tag, ai1, ai2, bj1, bj2 in cruncher.get_opcodes():
                 la, lb = ai2 - ai1, bj2 - bj1
                 if tag == 'replace':
@@ -1115,11 +1146,11 @@ class Differ:
                     btags += ' ' * lb
                 else:
                     raise ValueError('unknown tag %r' % (tag,))
-            yield from self._qformat(aelt, belt, atags, btags)
+            yield from self._qformat(lift(aelt), lift(belt), atags, btags)
         else:
             # the synch pair is identical
             #yield '  ' + aelt
-            yield Result(EditOp.Equal, aelt)
+            yield Result(EditOp.Equal, lift(aelt))
 
         # pump out diffs from after the synch point
         yield from self._fancy_helper(a, best_i+1, ahi, b, best_j+1, bhi)
@@ -1154,10 +1185,12 @@ class Differ:
         """
 
         # Can hurt, but will probably help most of the time.
-        common = min(_count_leading(aline, "\t"),
-                     _count_leading(bline, "\t"))
-        common = min(common, _count_leading(atags[:common], " "))
-        common = min(common, _count_leading(btags[:common], " "))
+        common = min(_count_leading(aline, str_elem("\t")),
+                     _count_leading(bline, str_elem("\t")))
+        common = min(common,
+                     _count_leading(lift(atags[:common]), str_elem(" ")))
+        common = min(common,
+                     _count_leading(lift(btags[:common]), str_elem(" ")))
         atags = atags[common:].rstrip()
         btags = btags[common:].rstrip()
 
@@ -1236,8 +1269,14 @@ def _format_range_unified(start: int, stop: int) -> TReslt:
         beginning -= 1        # empty ranges begin at line just before the range
     return Message('{},{}'.format(beginning, length))
 
-def unified_diff(a: TSeq, b: TSeq, fromfile: str = '', tofile: str = '', fromfiledate: str = '',
-                 tofiledate: str = '', n: int = 3, lineterm: TElem = '\n') -> Iterable[TReslt]:
+def unified_diff(a: TSeq,
+                 b: TSeq,
+                 fromfile: str = '',
+                 tofile: str = '',
+                 fromfiledate: str = '',
+                 tofiledate: str = '',
+                 n: int = 3,
+                 lineterm: str = '\n') -> Iterable[TReslt]:
     r"""
     Compare two sequences of lines; generate the delta as a unified diff.
 
@@ -1295,14 +1334,14 @@ def unified_diff(a: TSeq, b: TSeq, fromfile: str = '', tofile: str = '', fromfil
         for tag, i1, i2, j1, j2 in group:
             if tag == EditOp.Equal:
                 for line in a[i1:i2]:
-                    yield Result(EditOp.Equal, line)
+                    yield Result(EditOp.Equal, lift(line))
                 continue
             if tag in {EditOp.Replace, EditOp.Delete}:
                 for line in a[i1:i2]:
-                    yield Result(EditOp.Delete, line)
+                    yield Result(EditOp.Delete, lift(line))
             if tag in {EditOp.Replace, EditOp.Insert}:
                 for line in b[j1:j2]:
-                    yield Result(EditOp.Insert, line)
+                    yield Result(EditOp.Insert, lift(line))
 
 
 ########################################################################
@@ -1321,8 +1360,14 @@ def _format_range_context(start: int, stop: int) -> TReslt:
     return Message('{},{}'.format(beginning, beginning + length - 1))
 
 # See http://www.unix.org/single_unix_specification/
-def context_diff(a: TSeq, b: TSeq, fromfile: str = '', tofile: str = '',
-                 fromfiledate: str = '', tofiledate: str = '', n: int = 3, lineterm: TElem = '\n') -> Iterable[TReslt]:
+def context_diff(a: TSeq,
+                 b: TSeq,
+                 fromfile: str = '',
+                 tofile: str = '',
+                 fromfiledate: str = '',
+                 tofiledate: str = '',
+                 n: int = 3,
+                 lineterm: str = '\n') -> Iterable[TReslt]:
     r"""
     Compare two sequences of lines; generate the delta as a context diff.
 
@@ -1386,7 +1431,7 @@ def context_diff(a: TSeq, b: TSeq, fromfile: str = '', tofile: str = '',
             for tag, i1, i2, _, _ in group:
                 if tag != EditOp.Insert:
                     for line in a[i1:i2]:
-                        yield Result(tag, line)
+                        yield Result(tag, lift(line))
 
         file2_range = _format_range_context(first[3], last[4])
         yield Message('--- {} ----{}'.format(file2_range, lineterm))
@@ -1395,7 +1440,7 @@ def context_diff(a: TSeq, b: TSeq, fromfile: str = '', tofile: str = '',
             for tag, _, _, j1, j2 in group:
                 if tag != EditOp.Delete:
                     for line in b[j1:j2]:
-                        yield Result(tag, line)
+                        yield Result(tag, lift(line))
 
 def _check_types(a: TSeq, b: TSeq, *args: str) -> None:
     # Checking types is weird, but the alternative is garbled output when
