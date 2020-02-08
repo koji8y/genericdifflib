@@ -52,13 +52,13 @@ from collections import namedtuple as _namedtuple
 import re
 
 TElem = NewType('TElem', str)
-TSeq = Sequence[TElem]
-#TReslt = str
+#TSeq = Sequence[TElem]
+##TReslt = str
 TTag = str
 #EditOp = str
 TTT = TypeVar('TTT')
 
-class StringAsSequence(TSeq):
+class StringAsSequence(Sequence[TElem]):
     def __init__(self, string: str):
         self._string = string
 
@@ -71,7 +71,7 @@ class StringAsSequence(TSeq):
     def __repr__(self) -> str:
         return self._string
 
-def lift(value: Union[TSeq, TElem, str]) -> TSeq:
+def lift(value: Union[Sequence[TElem], TElem, str]) -> Sequence[TElem]:
     if isinstance(value, str):
         return Str(value)
     return value
@@ -99,7 +99,7 @@ class EditOp(Enum):
 OpCode = Tuple[EditOp, int, int, int, int]
 
 class Result:
-    def __init__(self, edit_op: EditOp, target: TSeq):
+    def __init__(self, edit_op: EditOp, target: Sequence[TElem]):
         self.edit_op = edit_op
         self.target = target
 
@@ -255,8 +255,8 @@ class SequenceMatcher:
     def __init__(
             self,
             isjunk: Optional[Callable[[TElem], bool]] = None,
-            a: TSeq = Str(''),
-            b: TSeq = Str(''),
+            a: Sequence[TElem] = Str(''),
+            b: Sequence[TElem] = Str(''),
             autojunk: bool = True):
         """Construct a SequenceMatcher.
 
@@ -317,12 +317,12 @@ class SequenceMatcher:
         #      nonjunk items in b treated as junk by the heuristic (if used).
 
         self.isjunk = isjunk
-        self.a: TSeq = Str('')  # None
-        self.b: TSeq = Str('')  # None
+        self.a: Sequence[TElem] = Str('')  # None
+        self.b: Sequence[TElem] = Str('')  # None
         self.autojunk = autojunk
         self.set_seqs(a, b)
 
-    def set_seqs(self, a: TSeq, b: TSeq) -> None:
+    def set_seqs(self, a: Sequence[TElem], b: Sequence[TElem]) -> None:
         """Set the two sequences to be compared.
 
         >>> s = SequenceMatcher()
@@ -334,7 +334,7 @@ class SequenceMatcher:
         self.set_seq1(a)
         self.set_seq2(b)
 
-    def set_seq1(self, a: TSeq) -> None:
+    def set_seq1(self, a: Sequence[TElem]) -> None:
         """Set the first sequence to be compared.
 
         The second sequence to be compared is not changed.
@@ -361,7 +361,7 @@ class SequenceMatcher:
         self.opcodes: Optional[List[OpCode]] = None
         self.matching_blocks: Optional[List[Match]] = None
 
-    def set_seq2(self, b: TSeq) -> None:
+    def set_seq2(self, b: Sequence[TElem]) -> None:
         """Set the second sequence to be compared.
 
         The first sequence to be compared is not changed.
@@ -814,10 +814,10 @@ class SequenceMatcher:
         # shorter sequence
         return _calculate_ratio(min(la, lb), la + lb)
 
-def get_close_matches(word: TSeq,
-                      possibilities: List[TSeq],
+def get_close_matches(word: Sequence[TElem],
+                      possibilities: List[Sequence[TElem]],
                       n: int = 3,
-                      cutoff: float = 0.6) -> List[TSeq]:
+                      cutoff: float = 0.6) -> List[Sequence[TElem]]:
     """Use SequenceMatcher to return list of the best "good enough" matches.
 
     word is a sequence for which close matches are desired (typically a
@@ -850,7 +850,7 @@ def get_close_matches(word: TSeq,
         raise ValueError("n must be > 0: %r" % (n,))
     if not 0.0 <= cutoff <= 1.0:
         raise ValueError("cutoff must be in [0.0, 1.0]: %r" % (cutoff,))
-    result: List[Tuple[float, TSeq]] = []
+    result: List[Tuple[float, Sequence[TElem]]] = []
     s = SequenceMatcher()
     s.set_seq2(word)
     for x in possibilities:
@@ -865,7 +865,7 @@ def get_close_matches(word: TSeq,
     # Strip scores for the best n matches
     return [x for score, x in result]
 
-def _count_leading(line: TSeq, ch: TElem) -> int:
+def _count_leading(line: Sequence[TElem], ch: TElem) -> int:
     """
     Return number of `ch` characters at the start of `line`.
 
@@ -997,7 +997,7 @@ class Differ:
         self.linejunk = linejunk
         self.charjunk = charjunk
 
-    def compare(self, a: TSeq, b: TSeq) -> Iterable[TReslt]:
+    def compare(self, a: Sequence[TElem], b: Sequence[TElem]) -> Iterable[TReslt]:
         r"""
         Compare two sequences of lines; generate the resulting delta.
 
@@ -1038,13 +1038,13 @@ class Differ:
 
             yield from g
 
-    def _dump(self, tag: EditOp, x: TSeq, lo: int, hi: int) -> Iterable[TReslt]:
+    def _dump(self, tag: EditOp, x: Sequence[TElem], lo: int, hi: int) -> Iterable[TReslt]:
         """Generate comparison results for a same-tagged range."""
         for i in range(lo, hi):
             # (sv) yield '%s %s' % (tag, x[i])
             yield Result(tag, lift(x[i]))
 
-    def _plain_replace(self, a: TSeq, alo: int, ahi: int, b: TSeq, blo: int, bhi: int) -> Iterable[TReslt]:
+    def _plain_replace(self, a: Sequence[TElem], alo: int, ahi: int, b: Sequence[TElem], blo: int, bhi: int) -> Iterable[TReslt]:
         assert alo < ahi and blo < bhi
         # dump the shorter block first -- reduces the burden on short-term
         # memory if the blocks are of very different sizes
@@ -1058,7 +1058,7 @@ class Differ:
         for g in first, second:
             yield from g
 
-    def _fancy_replace(self, a: TSeq, alo: int, ahi: int, b: TSeq, blo: int, bhi: int) -> Iterable[TReslt]:
+    def _fancy_replace(self, a: Sequence[TElem], alo: int, ahi: int, b: Sequence[TElem], blo: int, bhi: int) -> Iterable[TReslt]:
         r"""
         When replacing one block of lines with another, search the blocks
         for *similar* lines; the best-matching pair (if any) is used as a
@@ -1155,7 +1155,7 @@ class Differ:
         # pump out diffs from after the synch point
         yield from self._fancy_helper(a, best_i+1, ahi, b, best_j+1, bhi)
 
-    def _fancy_helper(self, a: TSeq, alo: int, ahi: int, b: TSeq, blo: int, bhi: int) -> Iterable[TReslt]:
+    def _fancy_helper(self, a: Sequence[TElem], alo: int, ahi: int, b: Sequence[TElem], blo: int, bhi: int) -> Iterable[TReslt]:
         g: Iterable[TReslt] = []
         if alo < ahi:
             if blo < bhi:
@@ -1167,7 +1167,7 @@ class Differ:
 
         yield from g
 
-    def _qformat(self, aline: TSeq, bline: TSeq, atags: TTag, btags: TTag) -> Iterable[TReslt]:
+    def _qformat(self, aline: Sequence[TElem], bline: Sequence[TElem], atags: TTag, btags: TTag) -> Iterable[TReslt]:
         r"""
         Format "?" output and deal with leading tabs.
 
@@ -1269,8 +1269,8 @@ def _format_range_unified(start: int, stop: int) -> TReslt:
         beginning -= 1        # empty ranges begin at line just before the range
     return Message('{},{}'.format(beginning, length))
 
-def unified_diff(a: TSeq,
-                 b: TSeq,
+def unified_diff(a: Sequence[TElem],
+                 b: Sequence[TElem],
                  fromfile: str = '',
                  tofile: str = '',
                  fromfiledate: str = '',
@@ -1360,8 +1360,8 @@ def _format_range_context(start: int, stop: int) -> TReslt:
     return Message('{},{}'.format(beginning, beginning + length - 1))
 
 # See http://www.unix.org/single_unix_specification/
-def context_diff(a: TSeq,
-                 b: TSeq,
+def context_diff(a: Sequence[TElem],
+                 b: Sequence[TElem],
                  fromfile: str = '',
                  tofile: str = '',
                  fromfiledate: str = '',
@@ -1442,7 +1442,7 @@ def context_diff(a: TSeq,
                     for line in b[j1:j2]:
                         yield Result(tag, lift(line))
 
-def _check_types(a: TSeq, b: TSeq, *args: str) -> None:
+def _check_types(a: Sequence[TElem], b: Sequence[TElem], *args: str) -> None:
     # Checking types is weird, but the alternative is garbled output when
     # someone passes mixed bytes and str to {unified,context}_diff(). E.g.
     # without this check, passing filenames as bytes results in output like
@@ -1459,7 +1459,7 @@ def _check_types(a: TSeq, b: TSeq, *args: str) -> None:
         if not isinstance(arg, str):
             raise TypeError('all arguments must be str, not: %r' % (arg,))
 
-#def diff_bytes(dfunc: Callable[[Iterable[TSeq], Iterable[TSeq], str, str, str, str, int, Iterable[TSeq]], Iterable[TReslt]], a: Iterable[bytes], b: Iterable[bytes], fromfile: bytes = b'', tofile: bytes = b'',
+#def diff_bytes(dfunc: Callable[[Iterable[Sequence[TElem]], Iterable[Sequence[TElem]], str, str, str, str, int, Iterable[Sequence[TElem]y]], Iterable[TReslt]], a: Iterable[bytes], b: Iterable[bytes], fromfile: bytes = b'', tofile: bytes = b'',
 #               fromfiledate: bytes = b'', tofiledate: bytes = b'', n: int = 3, lineterm: bytes = b'\n') -> Iterable[bytes]:
 #    r"""
 #    Compare `a` and `b`, two sequences of lines represented as bytes rather
