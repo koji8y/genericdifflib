@@ -10,4 +10,5 @@ It supports sequences whose elements are of types having both methods `__eq__` a
 See [sample code](sample/diff.ipynb).
 
 ### Note
-- Methods other Differ().compare() are still imcomplete.
+- It supports only `Differ().compare()`.
+    - Other methods are still or eternally imcomplete.
