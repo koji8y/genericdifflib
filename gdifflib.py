@@ -78,6 +78,8 @@ OpCode = Tuple[EditOp, int, int, int, int]
 
 class Result(Generic[TElem]):  # pylint: disable=too-few-public-methods
     """Different part."""
+    __slot__ = ['edit_op', 'first', 'second']
+
     def __init__(self, edit_op: EditOp, *target: TElem):
         self.edit_op = edit_op
         if edit_op == EditOp.Delete:
