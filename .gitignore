@@ -9,3 +9,6 @@ Thumbs.db
 tmp*
 
 .ipynb_checkpoints/
+build/
+dist/
+gdifflib.egg-info/

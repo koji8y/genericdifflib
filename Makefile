@@ -132,3 +132,6 @@ reopen_notebook: restart_notebook
 
 list_notebook:
 	jupyter-notebook list
+
+mkpkg:
+	@python3 -m setup bdist_wheel

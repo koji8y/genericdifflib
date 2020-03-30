@@ -27,6 +27,8 @@ Class HtmlDiff:
     For producing HTML side by side comparison with change highlights.
 """
 
+__version__ = '0.5.0'
+
 __all__ = ['Util', 'ndiff', 'restore', 'SequenceMatcher',
            'Differ',
            'is_character_junk', 'is_line_junk',
