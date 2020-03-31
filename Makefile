@@ -137,3 +137,6 @@ list_notebook:
 
 mkpkg:
 	@python3 -m setup bdist_wheel
+
+stub:
+	@stubgen -o . gdifflib
