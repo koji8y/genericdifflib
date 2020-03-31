@@ -79,6 +79,8 @@ lint: _check_env
 _find_py:
 	@find . \
 	  -name ${ENV} -prune -o \
+	  -type d -name build -prune -o \
+	  -type d -name dist -prune -o \
 	  -name "*.py" \
 	  -print
 
