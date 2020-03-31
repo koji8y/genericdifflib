@@ -1,11 +1,14 @@
 # pylint: disable=too-many-lines
 """
-Module difflib -- helpers for computing deltas between objects.
+Module gdifflib -- helpers for computing deltas between objects.
 
-Function get_close_matches(word, possibilities, n=3, cutoff=0.6):
+This is a modified version of difflib in Python 3.7.6.
+Copyright © 2001-2020 Python Software Foundation; All Rights Reserved
+
+Function Util.get_close_matches(word, possibilities, n=3, cutoff=0.6):
     Use SequenceMatcher to return list of the best "good enough" matches.
 
-Function context_diff(a, b):
+Function CDiff.context_diff(a, b):
     For two lists of strings, return a delta in context diff format.
 
 Function ndiff(a, b):
@@ -14,7 +17,7 @@ Function ndiff(a, b):
 Function restore(delta, which):
     Return one of the two sequences that generated an ndiff delta.
 
-Function unified_diff(a, b):
+Function UDiff.unified_diff(a, b):
     For two lists of strings, return a delta in unified diff format.
 
 Class SequenceMatcher:
