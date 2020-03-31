@@ -30,4 +30,4 @@ See [sample code](sample/diff.ipynb).
 
 ### Note
 - It supports only `Differ().compare()`.
-    - Other methods are still or eternally imcomplete.
+    - Other methods are still or eternally incomplete.
