@@ -135,8 +135,8 @@ reopen_notebook: restart_notebook
 list_notebook:
 	jupyter-notebook list
 
-mkpkg:
+mkpkg: _check_env
 	@python3 -m setup bdist_wheel
 
-stub:
+stub: _check_env
 	@stubgen -o . gdifflib
