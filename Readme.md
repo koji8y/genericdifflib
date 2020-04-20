@@ -20,7 +20,8 @@ Difflib for sequences of almost any types as well as str.
 [[Delete]A(foo 1), [Equal]A(bar 2),A(baz 2)]
 ```
 
-It is based on [difflib](https://docs.python.org/3/library/difflib.html) of Python 3.7.6.
+- It is based on [difflib](https://docs.python.org/3/library/difflib.html) of Python 3.7.6.
+- All methods are attached type hints.
 
 ### Targets to compare
 It supports sequences whose elements are of types having both methods `__eq__` and `__hash__`.
@@ -31,3 +32,4 @@ See [sample code](sample/diff.ipynb).
 ### Note
 - It supports only `Differ().compare()`.
     - Other methods are still or eternally incomplete.
+- `_fancy_replace` for `Differ().compare()` is disabled now.
