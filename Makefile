@@ -58,7 +58,7 @@ prepare_pkg: _check_env _prepare_pkg_wo_check_env
 
 _prepare_pkg_wo_check_env:
 	@${pip3} install --upgrade pip
-	@${pip3} install -r requirements
+	@${pip3} install -r requirements.txt
 
 check_wellformed: flake_core typecheck
 

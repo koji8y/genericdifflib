@@ -30,7 +30,7 @@ Class HtmlDiff:
     For producing HTML side by side comparison with change highlights.
 """
 
-__version__ = '0.5.1'
+__version__ = '0.5.2'
 
 __all__ = ['Util', 'ndiff', 'restore', 'SequenceMatcher',
            'Differ',
@@ -1221,23 +1221,23 @@ class Differ(Generic[TElem]):  # pylint: disable=too-few-public-methods
         # do intraline marking on the synch pair
         aelt, belt = seq_a[best_i], seq_b[best_j]
         if eqi is None:
-            # pump out seq_a '-', '?', '+', '?' quad for the synched lines
-            atags = btags = ""
-            cruncher.set_seqs(Util[TElem].lift(aelt), Util[TElem].lift(belt))
-            for tag, ai1, ai2, bj1, bj2 in cruncher.get_opcodes():
-                len_a, len_b = ai2 - ai1, bj2 - bj1
-                if tag == 'replace':
-                    atags += '^' * len_a
-                    btags += '^' * len_b
-                elif tag == 'delete':
-                    atags += '-' * len_a
-                elif tag == 'insert':
-                    btags += '+' * len_b
-                elif tag == 'equal':
-                    atags += ' ' * len_a
-                    btags += ' ' * len_b
-                else:
-                    raise ValueError('unknown tag %r' % (tag,))
+            # # pump out seq_a '-', '?', '+', '?' quad for the synched lines
+            # atags = btags = ""
+            # cruncher.set_seqs(Util[TElem].lift(aelt), Util[TElem].lift(belt))
+            # for tag, ai1, ai2, bj1, bj2 in cruncher.get_opcodes():
+            #    len_a, len_b = ai2 - ai1, bj2 - bj1
+            #    if tag == 'replace':
+            #        atags += '^' * len_a
+            #        btags += '^' * len_b
+            #    elif tag == 'delete':
+            #        atags += '-' * len_a
+            #    elif tag == 'insert':
+            #        btags += '+' * len_b
+            #    elif tag == 'equal':
+            #        atags += ' ' * len_a
+            #        btags += ' ' * len_b
+            #    else:
+            #        raise ValueError('unknown tag %r' % (tag,))
             # yield from self._qformat(Util[TElem].lift(aelt),
             #                         Util[TElem].lift(belt),
             #                         atags, btags)
