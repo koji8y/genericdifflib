@@ -30,7 +30,7 @@ Class HtmlDiff:
     For producing HTML side by side comparison with change highlights.
 """
 
-__version__ = '0.5.2'
+__version__ = '0.5.3'
 
 __all__ = ['Util', 'ndiff', 'restore', 'SequenceMatcher',
            'Differ',
@@ -38,6 +38,7 @@ __all__ = ['Util', 'ndiff', 'restore', 'SequenceMatcher',
            'CDiff', 'UDiff',
            'HtmlDiff', 'Match']
 
+from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import Generic
@@ -101,6 +102,12 @@ class Result(Generic[TElem]):  # pylint: disable=too-few-public-methods
         str2: Union[TElem, str] = '' if self.second is None else self.second
         sep = ',' if self.first is not None and self.second is not None else ''
         return '[{}]{}{}{}'.format(self.edit_op, str1, sep, str2)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """get dict type of contents."""
+        return {'edit_op': self.edit_op.value,
+                'first': self.first,
+                'second': self.second}
 
 
 class Message:  # pylint: disable=too-few-public-methods
